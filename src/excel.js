@@ -3,7 +3,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { readFile, writeFile } from '@tauri-apps/plugin-fs';
 
 async function readFileBytes(path) {
-  return await readFile(path);
+  const data = await readFile(path);
+  if (data instanceof Uint8Array) {
+    return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+  }
+  return data;
 }
 
 async function writeToFile(path, uint8array) {
@@ -105,8 +109,8 @@ export async function importFromExcel(filePath) {
       let hasName = false, hasVersion = false;
       headerRow.eachCell(function (cell) {
         const text = String(cell.value || '').trim();
-        if (text.includes('组件名称') || (text.includes('组件') && text.includes('名称'))) hasName = true;
-        if (text.includes('版本号') || text.includes('版本')) hasVersion = true;
+        if (text === '组件名称' || text === '组件版本') hasName = true;
+        if (text === '版本号' || text === '组件版本' || text === '版本') hasVersion = true;
       });
       if (hasName && hasVersion) sheet = ws;
     });
@@ -123,17 +127,15 @@ export async function importFromExcel(filePath) {
   });
 
   if (!nameCol) {
-    let hasGenericName = false;
     headerRow.eachCell(function (cell, colNumber) {
       const text = String(cell.value || '').trim();
-      if (text.includes('组件') || text.includes('名称') || text.includes('name') || text.includes('Component')) {
+      if (text === '组件名称' || text === '组件名' || text === 'name' || text === 'Name') {
         nameCol = colNumber;
-        hasGenericName = true;
-      } else if (text.includes('版本') || text.includes('version') || text.includes('Version')) {
+      } else if (text === '版本号' || text === '版本' || text === '组件版本' || text === 'version' || text === 'Version') {
         versionCol = colNumber;
       }
     });
-    if (!hasGenericName) nameCol = 4;
+    if (!nameCol) nameCol = 4;
   }
   if (!versionCol) versionCol = 5;
 
