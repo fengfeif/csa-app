@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>组件安全研判</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div class="header">
+    <h1>组件安全研判</h1>
+    <div class="btn-row">
+      <button class="btn btn-sm btn-secondary" id="btnAIConfig">AI配置</button>
+      <button class="btn btn-sm btn-secondary" id="btnSync">数据同步</button>
+      <button class="btn btn-sm btn-secondary" id="btnClearEOL" title="清除已缓存的 EOL 结论">清除EOL缓存</button>
+      <button class="theme-toggle" id="btnTheme" title="切换主题">☀</button>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab active" id="tabSingle">单组件研判</div>
+    <div class="tab" id="tabBatch">批量研判</div>
+  </div>
+
+  <div class="card" id="singleCard">
+    <div class="card-title">单组件研判</div>
+    <div class="form-row">
+      <div class="form-group"><label>组件名称 *</label><input id="compName" placeholder="如 jackson-jaxrs-json-provider 或 groupId:artifactId"></div>
+      <div class="form-group"><label>版本号 *</label><input id="compVersion" placeholder="如 2.14.1"></div>
+      <div class="form-group"><label>厂商 / 组织</label><input id="compVendor" placeholder="如 Apache, VMware"></div>
+      <div class="form-group" style="flex:0 0 auto"><button class="btn btn-primary" id="btnAssess">开始研判</button></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="batchCard">
+    <div class="card-title">批量研判</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <textarea id="batchInput" placeholder="每行一个组件，格式：组件名,版本号[,厂商]&#10;支持 groupId:artifactId 格式&#10;例如：&#10;org.apache.commons:commons-lang3,3.12.0,Apache&#10;log4j-core,2.17.1"></textarea>
+    </div>
+    <div class="excel-btn-row">
+      <button class="btn btn-sm btn-secondary" id="btnImportExcel">导入 Excel</button>
+      <button class="btn btn-primary" id="btnStartBatch">批量研判全部</button>
+      <button class="btn btn-sm btn-success" id="btnBatchExportExcel" style="display:none">导出 Excel 报告</button>
+      <button class="btn btn-sm btn-secondary" id="btnSwitchSingle">切回单组件</button>
+    </div>
+    <div class="batch-progress hidden" id="batchProgress"><div class="batch-progress-bar" id="batchProgressBar" style="width:0%"></div></div>
+    <table class="batch-table hidden" id="batchTable"><thead><tr><th>组件</th><th>版本</th><th>漏洞数(严重/高危)</th><th>EOL状态</th><th>操作</th></tr></thead><tbody id="batchTbody"></tbody></table>
+  </div>
+
+  <div class="card hidden" id="aiCard">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>AI 兜底配置（endoflife.date 查不到时自动调用）</span>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-secondary" id="btnClearAI" title="清除缓存的配置">清除缓存</button>
+        <button class="btn btn-sm btn-secondary" id="btnToggleAICard">收起</button>
+      </div>
+    </div>
+    <div id="aiConfigBody">
+      <div class="form-row">
+        <div class="form-group" style="flex:1"><label>API 端点（OpenAI 兼容）</label><input id="aiEndpoint" value="https://api.deepseek.com/v1/chat/completions" placeholder="https://api.openai.com/v1/chat/completions"></div>
+        <div class="form-group" style="flex:0 0 260px"><label>API Key</label><input id="aiKey" type="password" value="sk-7402865cf9234d1ab6c3dee556087f6a" placeholder="sk-..."></div>
+        <div class="form-group" style="flex:0 0 160px"><label>模型</label><input id="aiModel" value="deepseek-v4-flash" placeholder="gpt-4o-mini"></div>
+        <div class="form-group" style="flex:0 0 100px"><label>失败重试次数</label><input id="aiRetry" type="number" min="0" max="10" value="2" placeholder="2"></div>
+        <div class="form-group" style="flex:0 0 auto;display:flex;align-items:flex-end">
+          <button class="btn btn-sm btn-success" id="btnTestAI">测试连接</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:0.7rem;color:var(--text-secondary);display:flex;align-items:center;gap:8px">
+        <span>支持所有 OpenAI 兼容接口。API Key 自动保存在浏览器本地存储中。</span>
+        <span id="aiTestStatus" style="font-weight:500"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="syncCard">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>跨主机数据同步</span>
+      <button class="btn btn-sm btn-secondary" id="btnCloseSync">收起</button>
+    </div>
+    <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:12px;line-height:1.8">
+      本页面数据（AI 配置、EOL 缓存、批量输入列表）保存在各浏览器 localStorage 中，跨主机不共享。<br>
+      方案A：在源机器<b>导出配置</b>为 JSON 文件，到目标机器<b>导入</b>即可恢复全部数据。<br>
+      方案B：将整个 HTML 文件部署到内网共享服务器/网盘，所有主机访问同一 URL（仍建议定期导出备份）。
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:0 0 auto">
+        <button class="btn btn-primary" id="btnExport">导出全部数据（JSON）</button>
+        <button class="btn btn-secondary" id="btnImport">导入数据文件</button>
+        <input type="file" id="importFile" accept=".json" class="hidden">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label>同步提示</label>
+        <input id="syncStatus" placeholder="导出后在另一台机器上导入" readonly>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:0.7rem;color:var(--text-secondary)">
+      导出内容：AI 配置（含 Key）、EOL 缓存（30天内有效结论）、批量输入列表、内部组件规则。<b>注意：导出文件含 API Key，请妥善保管。</b>
+    </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px"><b>Excel 工具</b></div>
+      <button class="btn btn-sm btn-secondary" id="btnMergeExcel">合并多个 Excel（表头不变）</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">研判流程</div>
+    <div class="steps" id="steps">
+      <div class="step pending" data-step="1"><div class="step-num">1</div>CPE资产匹配</div>
+      <div class="step pending" data-step="2"><div class="step-num">2</div>CVE漏洞检索</div>
+      <div class="step pending" data-step="3"><div class="step-num">3</div>官方公告核验</div>
+      <div class="step pending" data-step="4"><div class="step-num">4</div>GitHub Release</div>
+      <div class="step pending" data-step="5"><div class="step-num">5</div>AI深度分析</div>
+      <div class="step pending" data-step="6"><div class="step-num">6</div>生命周期文档</div>
+      <div class="step pending" data-step="7"><div class="step-num">7</div>维护规则提取</div>
+      <div class="step pending" data-step="8"><div class="step-num">8</div>EOL终止判定</div>
+    </div>
+  </div>
+
+  <div class="result-section" id="resultSection">
+    <div class="result-card">
+      <h3>漏洞风险</h3>
+      <div id="vulnList"><span style="color:var(--text-secondary);font-size:0.8rem">等待研判…</span></div>
+    </div>
+    <div class="result-card">
+      <h3>EOL 生命周期</h3>
+      <div id="eolResult"><span style="color:var(--text-secondary);font-size:0.8rem">等待研判…</span></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="reportCard">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>研判报告</span>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-success" id="btnReportEOL">导出 EOL 报告</button>
+        <button class="btn btn-sm btn-warning" id="btnReportVuln">导出漏洞报告</button>
+        <button class="btn btn-sm btn-primary" id="btnReportAll">导出全部报告</button>
+        <button class="btn btn-sm btn-secondary" id="btnCopyReport">复制</button>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-bottom:12px">
+      <button class="btn btn-sm btn-success" id="btnExportExcel">导出 Excel 报告</button>
+    </div>
+    <div class="report" id="reportContent"></div>
+  </div>
+
+  <div class="card hidden" id="aiRawCard">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>AI 原始返回 <span id="aiRawComp" style="color:var(--accent)"></span> <span id="aiRawTime" style="color:var(--text-secondary);font-weight:400"></span> <span id="aiRawModel" style="color:var(--text-secondary);font-weight:400"></span></span>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-secondary" id="btnCopyAIRaw">复制原始文本</button>
+        <button class="btn btn-sm btn-secondary" id="btnCloseAIRaw">关闭</button>
+      </div>
+    </div>
+    <div class="log-code" id="aiRawContent" style="max-height:300px;overflow-y:auto"></div>
+    <div class="log-code" id="aiRawParsed" style="max-height:200px;overflow-y:auto"></div>
+  </div>
+
+  <div class="card" id="logSpecCard">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>业务日志规范参考</span>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-primary" id="btnDownloadLogSpec">导出日志规范 (Markdown)</button>
+        <button class="btn btn-sm btn-secondary" id="btnExpandLogSpec">全部展开</button>
+      </div>
+    </div>
+
+    <div class="log-template-card">
+      <div class="log-template-header js-toggle">
+        <span><b>1. 关键业务节点</b> — 用户登录 / 支付成功 / 订单创建</span>
+        <span class="trace-status ok">业务线索</span>
+      </div>
+      <div class="log-template-body">
+        <div class="log-hint">业务日志用 INFO 级别，带 traceId 串起全链路。关键字包含 事件类型 event + 业务唯一标识 bizId。</div>
+        <div class="log-code">// 登录成功
+log.info("[{}] 用户登录成功 event=user.login userId={} sourceIp={} loginResult={}", traceId, userId, sourceIp, loginResult);
+
+// 登录失败（重点排查）
+log.warn("[{}] 用户登录失败 event=user.login.fail userId={} sourceIp={} failReason={}", traceId, userId, sourceIp, failReason);
+
+// 支付成功
+log.info("[{}] 支付成功 event=payment.success orderId={} userId={} amount={} channel={}", traceId, orderId, userId, amount, channel);
+
+// 订单创建
+log.info("[{}] 订单创建 event=order.create orderId={} userId={} amount={} goodsId={}", traceId, orderId, userId, amount, goodsId);</div>
+      </div>
+    </div>
+
+    <div class="log-template-card">
+      <div class="log-template-header js-toggle">
+        <span><b>2. 外部交互</b> — 第三方API / 数据库 / 消息队列（入参出参+脱敏）</span>
+        <span class="trace-status ok">易出问题</span>
+      </div>
+      <div class="log-template-body">
+        <div class="log-hint">一定记录入参和出参，注意<b>脱敏</b>（手机号/身份证/卡号/密码/Token 用 * 替换）。调用前打日志，返回后立刻打日志。</div>
+        <div class="log-code">// 第三方 HTTP API
+log.info("[{}] 调用第三方API 发起 target={} method={} request={}", traceId, url, httpMethod, maskParams(requestParams));
+log.info("[{}] 调用第三方API 返回 target={} status={} response={} costMs={}", traceId, url, httpStatus, maskParams(responseBody), costMs);
+
+// 数据库读写
+log.info("[{}] 数据库查询 sql={} params={} rows={} costMs={}", traceId, maskedSql, maskParams(sqlParams), rowCount, costMs);
+
+// 消息队列收发
+log.info("[{}] MQ发送 topic={} key={} message={} result={}", traceId, topic, msgKey, maskParams(messageBody), sendResult);
+log.info("[{}] MQ消费 topic={} key={} message={} consumeResult={}", traceId, topic, msgKey, maskParams(messageBody), consumeResult);</div>
+      </div>
+    </div>
+
+    <div class="log-template-card">
+      <div class="log-template-header js-toggle">
+        <span><b>3. 异常与错误</b> — Exception / 非预期返回值（完整堆栈）</span>
+        <span class="trace-status err">必须堆栈</span>
+      </div>
+      <div class="log-template-body">
+        <div class="log-hint">ERROR 级别，<b>必须传入异常对象</b>（e）以输出完整 Stack Trace，不要只打 e.getMessage()。调用链路上下文一并记录。</div>
+        <div class="log-code">// 捕获异常（带完整堆栈）
+log.error("[{}] 业务处理异常 event={} bizId={} params={}", traceId, "order.create", orderId, maskParams(orderReq), e);
+
+// 第三方调用异常
+log.error("[{}] 第三方调用异常 target={} request={}", traceId, url, maskParams(request), e);
+
+// 非预期返回值
+log.error("[{}] 非预期返回值 target={} expected={} actual={}", traceId, serviceName, "SUCCESS", actualResult);</div>
+      </div>
+    </div>
+
+    <div class="log-template-card">
+      <div class="log-template-header js-toggle">
+        <span><b>4. 状态变更</b> — 缓存失效 / 配置热更新 / 定时任务</span>
+        <span class="trace-status ok">运行轨迹</span>
+      </div>
+      <div class="log-template-body">
+        <div class="log-hint">状态变更用 INFO，记录 from→to 和触发源，便于回放运行轨迹。</div>
+        <div class="log-code">// 缓存失效
+log.info("[{}] 缓存失效 cacheKey={} reason={} reloadSource={}", traceId, cacheKey, "expired|evict|manual", reloadSource);
+
+// 配置热更新
+log.info("[{}] 配置热更新 configKey={} oldValue={} newValue={} operator={}", traceId, configKey, maskValue(oldVal), maskValue(newVal), operator);
+
+// 定时任务触发
+log.info("[{}] 定时任务触发 jobName={} triggerType={} start={}", traceId, jobName, "cron|manual", new Date());
+log.info("[{}] 定时任务完成 jobName={} processCount={} costMs={}", traceId, jobName, processCount, costMs);</div>
+      </div>
+    </div>
+
+    <div class="log-template-card">
+      <div class="log-template-header js-toggle">
+        <span><b>5. 性能指标</b> — 慢查询 / 接口耗时超阈值</span>
+        <span class="trace-status warn">性能预警</span>
+      </div>
+      <div class="log-template-body">
+        <div class="log-hint">慢查询与超时用 WARN，记录耗时与阈值。SQL 超过阈值需单独告警。</div>
+        <div class="log-code">// 接口耗时超阈值
+log.warn("[{}] 接口耗时超阈值 api={} costMs={} thresholdMs={} traceId={}", traceId, apiPath, costMs, thresholdMs, traceId);
+
+// 慢 SQL
+log.warn("[{}] 慢SQL sql={} params={} costMs={} thresholdMs={}", traceId, maskedSql, maskParams(params), costMs, 1000);
+
+// 慢外部调用
+log.warn("[{}] 外部调用慢 target={} costMs={} thresholdMs={}", traceId, url, costMs, 2000);</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="auditCard">
+    <div class="card-title">审计台账</div>
+    <div class="audit-log" id="auditLog"></div>
+  </div>
+
+  <div class="card hidden" id="traceCard">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>步骤追踪（输入/输出）</span>
+      <button class="btn btn-sm btn-secondary" id="btnExpandTrace">全部展开</button>
+    </div>
+    <div id="traceContent"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
