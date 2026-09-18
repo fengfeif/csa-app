@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>组件安全研判 - macOS 使用说明</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      line-height: 1.8;
+      padding: 40px 20px;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 {
+      font-size: 2rem;
+      color: #0f172a;
+      margin-bottom: 8px;
+      padding-bottom: 16px;
+      border-bottom: 3px solid #6366f1;
+    }
+    .subtitle { color: #64748b; font-size: 0.95rem; margin-bottom: 40px; }
+    h2 {
+      font-size: 1.4rem;
+      color: #1e293b;
+      margin-top: 40px;
+      margin-bottom: 16px;
+      padding-left: 12px;
+      border-left: 4px solid #6366f1;
+    }
+    h3 {
+      font-size: 1.1rem;
+      color: #334155;
+      margin-top: 24px;
+      margin-bottom: 10px;
+    }
+    p { margin-bottom: 12px; color: #475569; }
+    ul, ol { margin-left: 24px; margin-bottom: 16px; color: #475569; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      background: #e2e8f0;
+      color: #be185d;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88rem;
+    }
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 16px 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; color: inherit; padding: 0; }
+    .note {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 16px;
+    }
+    .note strong { color: #1e40af; }
+    .warn {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 16px;
+    }
+    .warn strong { color: #92400e; }
+    .danger {
+      background: #fee2e2;
+      border-left: 4px solid #ef4444;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 16px;
+    }
+    .danger strong { color: #991b1b; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid #e2e8f0;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th { background: #f1f5f9; font-weight: 600; color: #0f172a; }
+    tr:nth-child(even) { background: #f8fafc; }
+    .toc {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px 28px;
+      margin-bottom: 40px;
+    }
+    .toc-title { font-weight: 700; font-size: 1.1rem; margin-bottom: 12px; color: #0f172a; }
+    .toc ol { margin-left: 20px; }
+    .toc li { margin-bottom: 4px; }
+    .toc a { text-decoration: none; color: #6366f1; }
+    .toc a:hover { text-decoration: underline; }
+    .feature-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 { margin-top: 0; }
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    .badge-new { background: #dbeafe; color: #1e40af; }
+    .badge-req { background: #fce7f3; color: #9f1239; }
+    .badge-opt { background: #d1fae5; color: #065f46; }
+    .footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>组件安全研判 — macOS 使用说明</h1>
+    <p class="subtitle">版本 1.0 | 适用 macOS 12.0+ (Apple Silicon / Intel) | 更新日期 2026-09-18</p>
+
+    <div class="toc">
+      <div class="toc-title">目录</div>
+      <ol>
+        <li><a href="#install">安装与启动</a></li>
+        <li><a href="#overview">功能概览</a></li>
+        <li><a href="#single">单组件研判</a></li>
+        <li><a href="#batch">批量研判与 Excel 导入</a></li>
+        <li><a href="#ai">AI 兜底配置</a></li>
+        <li><a href="#sync">数据同步与备份</a></li>
+        <li><a href="#export">报告导出</a></li>
+        <li><a href="#eol">EOL 判定逻辑说明</a></li>
+        <li><a href="#faq">常见问题</a></li>
+      </ol>
+    </div>
+
+    <h2 id="install">1. 安装与启动</h2>
+    <h3>系统要求</h3>
+    <table>
+      <tr><th>项目</th><th>最低要求</th></tr>
+      <tr><td>操作系统</td><td>macOS 12.0 (Monterey) 及以上</td></tr>
+      <tr><td>芯片架构</td><td>Apple Silicon (M1/M2/M3/M4) 或 Intel</td></tr>
+      <tr><td>内存</td><td>4 GB 以上</td></tr>
+      <tr><td>磁盘空间</td><td>50 MB（应用本体）</td></tr>
+      <tr><td>网络</td><td>需要联网（查询 CVE/EOL 数据）</td></tr>
+    </table>
+
+    <h3>安装步骤</h3>
+    <ol>
+      <li>将 <code>组件安全研判.app</code> 拖入 <code>/Applications/</code>（访达左侧"应用程序"文件夹）</li>
+      <li>首次打开时，macOS 会提示"无法验证开发者"。点击 <strong>取消</strong>，然后打开 <strong>系统设置 → 隐私与安全性</strong>，在底部点击 <strong>仍要打开</strong></li>
+      <li>再次双击应用，在弹出的确认框中点击 <strong>打开</strong></li>
+      <li>应用启动后即可使用</li>
+    </ol>
+
+    <div class="warn">
+      <strong>注意：</strong>首次启动需联网。应用需要访问 <code>search.maven.org</code>、<code>endoflife.date</code>、<code>api.deepseek.com</code> 等外部服务，请确保网络通畅。
+    </div>
+
+    <h3>卸载</h3>
+    <p>将 <code>组件安全研判.app</code> 从 <code>/Applications/</code> 拖入废纸篓即可。应用不在系统中残留任何配置文件。</p>
+
+    <h2 id="overview">2. 功能概览</h2>
+
+    <p>组件安全研判是一个桌面工具，用于对开源软件组件进行安全漏洞和生命周期（EOL）评估。主要功能：</p>
+
+    <div class="feature-card">
+      <h3>单组件研判 <span class="badge badge-opt">可选</span></h3>
+      <p>输入组件名和版本号，对单个组件进行完整的 8 步安全研判流程。</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>批量研判 <span class="badge badge-req">核心</span></h3>
+      <p>支持从 Excel 导入组件清单（最多数百个），5 个并发研判，批量生成漏洞和 EOL 报告。</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>AI 兜底 <span class="badge badge-new">智能</span></h3>
+      <p>当自动化数据源（endoflife.date、Maven Central、GitHub）都查不到时，调用 AI 模型进行 EOL 判定。</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>报告导出 <span class="badge badge-req">核心</span></h3>
+      <p>支持导出 Excel 格式的安全检测报告，包含漏洞详情和 EOL 状态。</p>
+    </div>
+
+    <h2 id="single">3. 单组件研判</h2>
+
+    <h3>输入格式</h3>
+    <table>
+      <tr><th>字段</th><th>必填</th><th>格式</th><th>示例</th></tr>
+      <tr><td>组件名称</td><td>是</td><td>artifactId 或 groupId:artifactId</td><td><code>log4j-core</code> 或 <code>org.apache.logging.log4j:log4j-core</code></td></tr>
+      <tr><td>版本号</td><td>是</td><td>语义化版本号</td><td><code>2.17.1</code></td></tr>
+      <tr><td>厂商/组织</td><td>否</td><td>组织名称</td><td><code>Apache</code></td></tr>
+    </table>
+
+    <h3>研判流程（8 步）</h3>
+    <table>
+      <tr><th>步骤</th><th>名称</th><th>说明</th></tr>
+      <tr><td>1</td><td>CPE 资产匹配</td><td>在 NVD 数据库中匹配组件的 CPE 标识</td></tr>
+      <tr><td>2</td><td>CVE 漏洞检索</td><td>检索该组件版本已知的安全漏洞</td></tr>
+      <tr><td>3</td><td>官方公告核验</td><td>核验漏洞的官方公告和影响范围</td></tr>
+      <tr><td>4</td><td>GitHub Release</td><td>检查 GitHub 上的最新发布版本</td></tr>
+      <tr><td>5</td><td>AI 深度分析</td><td>AI 分析组件的安全状态</td></tr>
+      <tr><td>6</td><td>生命周期文档</td><td>查阅 endoflife.date 获取生命周期信息</td></tr>
+      <tr><td>7</td><td>维护规则提取</td><td>从内部规则库匹配组件维护状态</td></tr>
+      <tr><td>8</td><td>EOL 终止判定</td><td>综合所有数据源判定 EOL 状态</td></tr>
+    </table>
+
+    <h3>操作步骤</h3>
+    <ol>
+      <li>在"单组件研判"页签下，填写组件名称和版本号</li>
+      <li>点击 <strong>开始研判</strong></li>
+      <li>研判过程中，8 个步骤图标会依次变为绿色（完成）或灰色（跳过）</li>
+      <li>研判完成后，下方自动展示漏洞风险和 EOL 生命周期结果</li>
+      <li>点击 <strong>导出 Excel 报告</strong> 可导出完整报告</li>
+    </ol>
+
+    <h2 id="batch">4. 批量研判与 Excel 导入</h2>
+
+    <h3>Excel 导入格式</h3>
+    <p>Excel 文件需包含一个名为 <code>检出组件信息</code> 的工作表，表头必须包含以下列：</p>
+    <table>
+      <tr><th>列名</th><th>说明</th><th>示例</th></tr>
+      <tr><td>组件名称</td><td>组件的 artifactId 或 groupId:artifactId</td><td><code>org.apache.commons:commons-lang3</code></td></tr>
+      <tr><td>版本号</td><td>组件版本</td><td><code>3.12.0</code></td></tr>
+    </table>
+
+    <div class="note">
+      <strong>提示：</strong>表头匹配为精确匹配，请确保列名完全一致。其他列（如厂商、检出路径等）不影响导入。
+    </div>
+
+    <h3>操作步骤</h3>
+    <ol>
+      <li>点击顶部 <strong>批量研判</strong> 页签</li>
+      <li>点击 <strong>导入 Excel</strong>，选择 Excel 文件</li>
+      <li>导入后，批量输入框自动填充组件清单，格式为 <code>组件名,版本号</code>（每行一个）</li>
+      <li>点击 <strong>批量研判全部</strong> 开始研判</li>
+      <li>研判过程中，进度条实时显示进度</li>
+      <li>研判完成后，表格展示每个组件的漏洞数和 EOL 状态</li>
+      <li>点击 <strong>导出 Excel 报告</strong> 生成完整报告</li>
+    </ol>
+
+    <h3>批量输入格式（手动输入）</h3>
+    <p>也可以不导入 Excel，直接在文本框中手动输入：</p>
+    <pre><code>每行一个组件，格式：组件名,版本号[,厂商]
+支持 groupId:artifactId 格式
+
+例如：
+org.apache.commons:commons-lang3,3.12.0,Apache
+log4j-core,2.17.1
+jackson-databind,2.14.1,FasterXML</code></pre>
+
+    <h3>批量研判并发机制</h3>
+    <ul>
+      <li>每次同时研判 <strong>5 个</strong> 组件</li>
+      <li>每个组件的研判中，CPE 匹配、CVE 检索、EOL 检查 <strong>三步骤并行执行</strong></li>
+      <li>EOL 缓存：同名组件不同版本只查询 1 次 endoflife.date，后续版本直接使用缓存</li>
+      <li>网络请求超时控制：HTTP 请求 10 秒，AI 调用 15 秒，超时后跳过</li>
+    </ul>
+
+    <h2 id="ai">5. AI 兜底配置</h2>
+
+    <p>当 endoflife.date、Maven Central、GitHub 都查不到组件的 EOL 信息时，应用会自动调用 AI 模型进行兜底判定。</p>
+
+    <h3>配置项</h3>
+    <table>
+      <tr><th>配置项</th><th>说明</th><th>默认值</th></tr>
+      <tr><td>API 端点</td><td>OpenAI 兼容的 API 地址</td><td><code>https://api.deepseek.com/v1/chat/completions</code></td></tr>
+      <tr><td>API Key</td><td>API 密钥，保存在本地</td><td>预置（可替换）</td></tr>
+      <tr><td>模型</td><td>模型名称</td><td><code>deepseek-v4-flash</code></td></tr>
+      <tr><td>失败重试次数</td><td>AI 调用失败后的重试次数</td><td><code>2</code></td></tr>
+    </table>
+
+    <h3>操作步骤</h3>
+    <ol>
+      <li>点击顶部 <strong>AI配置</strong> 按钮</li>
+      <li>填写或修改 API 端点、API Key、模型名称</li>
+      <li>点击 <strong>测试连接</strong> 验证配置是否有效</li>
+      <li>连接成功后，配置自动保存到本地</li>
+    </ol>
+
+    <h3>AI 判定规则</h3>
+    <ul>
+      <li>组件仍有新版本发布、官方活跃维护 → <strong>维护中</strong></li>
+      <li>组件已停止维护、仅偶尔打安全补丁而无新功能开发 → <strong>已EOL</strong></li>
+      <li>组件即将停止维护（已公布 EOL 日期且在 6 个月内）→ <strong>即将EOL</strong></li>
+      <li>不确定时，默认判定为 <strong>已EOL</strong>（安全优先）</li>
+    </ul>
+
+    <div class="note">
+      <strong>提示：</strong>AI 不只依赖发布时间判断。Prompt 中明确要求 AI 结合项目实际的维护活跃度、社区活跃度、是否有维护计划来综合判断。
+    </div>
+
+    <h3>支持的其他 AI 服务</h3>
+    <p>任何兼容 OpenAI Chat Completions API 的服务都可以使用，例如：</p>
+    <ul>
+      <li>DeepSeek（默认）</li>
+      <li>OpenAI GPT-4o / GPT-4o-mini</li>
+      <li>通义千问（兼容模式）</li>
+      <li>本地部署的 Ollama / vLLM</li>
+    </ul>
+
+    <h2 id="sync">6. 数据同步与备份</h2>
+
+    <h3>导出/导入配置</h3>
+    <p>应用数据保存在本地，不跨设备同步。如需迁移到其他 Mac：</p>
+    <ol>
+      <li>点击 <strong>数据同步</strong> 按钮</li>
+      <li>点击 <strong>导出全部数据（JSON）</strong>，保存 JSON 文件</li>
+      <li>在目标 Mac 上打开应用，点击 <strong>数据同步</strong></li>
+      <li>点击 <strong>导入数据文件</strong>，选择之前导出的 JSON 文件</li>
+    </ol>
+
+    <p>导出内容包括：</p>
+    <ul>
+      <li>AI 配置（含 API Key）</li>
+      <li>EOL 缓存（30 天内有效结论）</li>
+      <li>批量输入列表</li>
+      <li>内部组件规则</li>
+    </ul>
+
+    <div class="danger">
+      <strong>安全警告：</strong>导出的 JSON 文件包含 API Key，请妥善保管，不要通过公开渠道传输。
+    </div>
+
+    <h3>清除 EOL 缓存</h3>
+    <p>点击 <strong>清除EOL缓存</strong> 可清除所有已缓存的 EOL 结论。建议在以下情况使用：</p>
+    <ul>
+      <li>修改了 AI prompt 或 EOL 判定逻辑后，需要重新研判</li>
+      <li>缓存数据过期，需要获取最新结果</li>
+      <li>研判结果与预期不符，需要排除缓存干扰</li>
+    </ul>
+
+    <h3>合并多个 Excel</h3>
+    <p>在"数据同步"面板中，点击 <strong>合并多个 Excel（表头不变）</strong> 可将多个结构相同的 Excel 文件合并为一个：</p>
+    <ul>
+      <li>以第一个文件为模板，保留工作表、表头、样式和列宽</li>
+      <li>仅追加数据型工作表（如"检出组件信息"）的行数据</li>
+      <li>结构特殊的工作表（如"导航"、"应用信息"）保留第一个文件的内容</li>
+    </ul>
+
+    <h2 id="export">7. 报告导出</h2>
+
+    <h3>单组件报告</h3>
+    <table>
+      <tr><th>按钮</th><th>格式</th><th>内容</th></tr>
+      <tr><td>导出 EOL 报告</td><td>Excel</td><td>EOL 生命周期判定详情</td></tr>
+      <tr><td>导出漏洞报告</td><td>Excel</td><td>CVE 漏洞详情</td></tr>
+      <tr><td>导出全部报告</td><td>Excel</td><td>漏洞 + EOL 完整报告</td></tr>
+      <tr><td>复制</td><td>文本</td><td>将报告内容复制到剪贴板</td></tr>
+    </table>
+
+    <h3>批量报告</h3>
+    <p>批量研判完成后，点击 <strong>导出 Excel 报告</strong> 生成完整的安全检测报告，包含：</p>
+    <ul>
+      <li>应用安全检测报告（漏洞详情 + EOL 状态）</li>
+      <li>软件成分分析情况明细表</li>
+      <li>总结统计表</li>
+    </ul>
+
+    <h2 id="eol">8. EOL 判定逻辑说明</h2>
+
+    <h3>数据源优先级</h3>
+    <p>EOL 判定按以下顺序查询数据源，命中即返回结果：</p>
+    <table>
+      <tr><th>顺序</th><th>数据源</th><th>说明</th></tr>
+      <tr><td>1</td><td>endoflife.date</td><td>开源组件生命周期数据库，按版本号匹配正确的 EOL 周期</td></tr>
+      <tr><td>2</td><td>Maven Central</td><td>查询最新版本和发布时间，超过 2 年未发布 → 已EOL</td></tr>
+      <tr><td>3</td><td>GitHub Releases</td><td>查询最新发布时间，超过 2 年未发布 → 已EOL</td></tr>
+      <tr><td>4</td><td>AI 兜底</td><td>以上都查不到时，调用 AI 综合判断</td></tr>
+    </table>
+
+    <h3>判定结果</h3>
+    <table>
+      <tr><th>状态</th><th>颜色</th><th>含义</th></tr>
+      <tr><td>维护中</td><td>绿色</td><td>组件仍在活跃维护，有新版本发布</td></tr>
+      <tr><td>已EOL</td><td>红色</td><td>组件已停止维护，建议规划迁移</td></tr>
+      <tr><td>即将EOL</td><td>橙色</td><td>组件将在 6 个月内停止维护，提前规划升级</td></tr>
+      <tr><td>AI判定</td><td>紫色</td><td>由 AI 模型判定，建议人工复核</td></tr>
+      <tr><td>待研判</td><td>紫色</td><td>尚未进行 EOL 研判</td></tr>
+    </table>
+
+    <h3>版本号匹配逻辑</h3>
+    <p>endoflife.date 返回多个版本周期（cycle）时，应用会按版本号前缀匹配正确的周期：</p>
+    <ul>
+      <li>用户版本 <code>2.3.2</code> → 匹配 cycle <code>2.3</code>（而非 <code>2</code>）</li>
+      <li>用户版本 <code>2.17.1</code> → 匹配 cycle <code>2.17</code></li>
+      <li>精确匹配优先，长前缀优先于短前缀</li>
+    </ul>
+
+    <h2 id="faq">9. 常见问题</h2>
+
+    <h3>Q: 首次打开提示"已损坏，无法打开"</h3>
+    <p>这是 macOS Gatekeeper 的安全机制。打开终端，执行：</p>
+    <pre><code>sudo xattr -cr /Applications/组件安全研判.app</code></pre>
+    <p>输入密码后，再次双击打开即可。</p>
+
+    <h3>Q: 研判结果显示"未知"或所有组件都标为"已EOL"</h3>
+    <p>可能原因和排查步骤：</p>
+    <ul>
+      <li>网络不通：检查是否能访问 <code>search.maven.org</code> 和 <code>endoflife.date</code></li>
+      <li>EOL 缓存过期：点击 <strong>清除EOL缓存</strong> 后重新研判</li>
+      <li>AI 配置无效：点击 <strong>AI配置</strong> → <strong>测试连接</strong> 验证</li>
+    </ul>
+
+    <h3>Q: 导入 Excel 后批量输入框内容异常</h3>
+    <p>确保 Excel 文件包含 <code>检出组件信息</code> 工作表，且表头中有 <code>组件名称</code> 和 <code>版本号</code> 列。表头必须精确匹配，不能有前后空格。</p>
+
+    <h3>Q: 研判速度很慢</h3>
+    <p>批量研判 144 个组件通常需要 5-15 分钟，取决于：</p>
+    <ul>
+      <li>网络质量（Maven Central、endoflife.date、GitHub 的响应速度）</li>
+      <li>需要 AI 兜底的组件数量（AI 调用比自动化数据源慢）</li>
+      <li>GitHub API 限流（每小时 60 次未认证请求）</li>
+    </ul>
+
+    <h3>Q: 如何切换深色/浅色主题</h3>
+    <p>点击右上角的 <strong>太阳/月亮</strong> 图标切换主题。主题设置自动保存。</p>
+
+    <h3>Q: AI 判定结果不准确怎么办</h3>
+    <p>AI 兜底是最后手段，准确性取决于 AI 模型对该组件的了解程度。建议：</p>
+    <ul>
+      <li>切换更强的模型（如 <code>deepseek-v4</code> 或 <code>gpt-4o</code>）</li>
+      <li>手动在单组件研判中复核 AI 判定结果</li>
+      <li>对于关键组件，以 endoflife.date 或官方文档为准</li>
+    </ul>
+
+    <div class="footer">
+      <p>组件安全研判 v1.0 | 技术栈：Tauri 2.0 + Vue.js + ExcelJS | 2026</p>
+    </div>
+  </div>
+</body>
+</html>
