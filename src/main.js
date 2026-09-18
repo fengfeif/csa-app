@@ -373,7 +373,7 @@ async function step5_ai_eol(name) {
   var maxRetry = parseInt($('aiRetry').value, 10);
   if (isNaN(maxRetry) || maxRetry < 0) maxRetry = 2;
   var maxAttempts = maxRetry + 1;
-  var basePrompt = '你是一个开源组件生命周期分析专家。请对组件 "' + name + '"（如包含冒号，冒号前是 groupId，后是 artifactId）进行 EOL 状态研判。\n\n判定规则：\n- 如果该组件仍有新版本发布、官方仍在维护 → "维护中"\n- 如果该组件已停止维护、官方不再发布更新 → "已EOL"\n- 如果该组件即将停止维护（已公布 EOL 日期且在 6 个月内）→ "即将EOL"\n\n如果不确定，默认判断为 "已EOL"。\n\n请以 JSON 格式返回：\n{\n  "eolStatus": "维护中" 或 "已EOL" 或 "即将EOL",\n  "currentVersionStatus": "描述当前已知最新版本是否仍在维护",\n  "latestSafeVersion": "推荐的安全版本号",\n  "rationale": "判定依据"\n}\n只返回 JSON，不要其他文字。';
+  var basePrompt = '你是一个开源组件生命周期分析专家。请对组件 "' + name + '"（如包含冒号，冒号前是 groupId，后是 artifactId）进行 EOL 状态研判。\n\n判定规则：\n- 如果该组件仍有新版本发布、官方仍在活跃维护 → "维护中"\n- 如果该组件已停止维护、官方不再发布更新、或仅偶尔打安全补丁而无新功能开发 → "已EOL"\n- 如果该组件即将停止维护（已公布 EOL 日期且在 6 个月内）→ "即将EOL"\n\n重要提示：\n- 不能仅凭最近是否有版本来判断是否在维护\n- 很多项目虽然近期有发布，但实际上已停止活跃维护，只是偶尔打安全补丁\n- 对于 Apache Commons 等老项目，如果已进入维护模式（仅安全补丁、无新功能），可判定为"已EOL"\n- 请结合你对这个组件的了解：官方是否活跃？社区是否活跃？是否有维护计划？\n\n如果不确定，默认判断为 "已EOL"。\n\n请以 JSON 格式返回：\n{\n  "eolStatus": "维护中" 或 "已EOL" 或 "即将EOL",\n  "currentVersionStatus": "描述当前已知最新版本是否仍在维护",\n  "latestSafeVersion": "推荐的安全版本号",\n  "rationale": "判定依据"\n}\n只返回 JSON，不要其他文字。';
   for (var attempt = 1; attempt <= maxAttempts; attempt++) {
     addAudit('[AI兜底] 第 ' + attempt + '/' + maxAttempts + ' 次尝试...');
     var outcome = await callAIOnce(name, endpoint, apiKey, model, basePrompt, attempt);
@@ -457,8 +457,22 @@ function buildFullReport() {
   var eolStatus = '未知', eolBasis = '无可用数据', suggestVersion = '请查阅官方发布页', eolAction = '查阅官方文档';
   var eolSource = d.eolSource || 'endoflife.date';
   if (d.eolData && Array.isArray(d.eolData) && d.eolData.length > 0) {
-    for (var i = 0; i < d.eolData.length; i++) { if (d.eolData[i].eol === false) { eolStatus = '维护中'; eolBasis = 'endoflife.date 版本 ' + d.eolData[i].cycle + ' 仍在维护'; suggestVersion = d.eolData[i].latest || d.eolData[i].cycle; break; } }
-    if (eolStatus === '未知' && d.eolData[0].eol && typeof d.eolData[0].eol === 'string' && new Date(d.eolData[0].eol) < new Date()) { eolStatus = '已EOL'; eolBasis = '所有版本 EOL 日期均在过去'; suggestVersion = '建议寻找替代方案'; eolAction = '立即规划迁移'; }
+    var matchedCycle = matchEOLCycle(d.eolData, d.version);
+    var eolVal = matchedCycle.eol;
+    if (eolVal === false) {
+      eolStatus = '维护中'; eolBasis = 'endoflife.date 版本 ' + matchedCycle.cycle + ' 仍在维护'; suggestVersion = matchedCycle.latest || matchedCycle.cycle;
+    } else if (eolVal === true || eolVal === 'true') {
+      eolStatus = '已EOL'; eolBasis = 'endoflife.date 版本 ' + matchedCycle.cycle + ' 已 EOL'; suggestVersion = '建议寻找替代方案'; eolAction = '立即规划迁移';
+    } else if (typeof eolVal === 'string' && eolVal.trim() !== '') {
+      var eolDate = new Date(eolVal);
+      if (!isNaN(eolDate.getTime()) && eolDate < new Date()) {
+        eolStatus = '已EOL'; eolBasis = 'endoflife.date 版本 ' + matchedCycle.cycle + ' EOL 日期 ' + eolVal + ' 已过期'; suggestVersion = '建议寻找替代方案'; eolAction = '立即规划迁移';
+      } else {
+        eolStatus = '即将EOL'; eolBasis = 'endoflife.date 版本 ' + matchedCycle.cycle + ' EOL 日期 ' + eolVal; suggestVersion = matchedCycle.latest || matchedCycle.cycle; eolAction = '提前规划升级';
+      }
+    } else {
+      eolStatus = '已EOL'; eolBasis = 'endoflife.date 版本 ' + matchedCycle.cycle + ' EOL 状态未知'; suggestVersion = '建议寻找替代方案'; eolAction = '查阅官方文档';
+    }
   } else if (eolSource === 'AI' && d.aiEol) {
     var ai = d.aiEol; eolStatus = ai.eolStatus || '未知'; eolBasis = 'AI 判定：' + (ai.rationale || '无'); suggestVersion = ai.latestSafeVersion || '请查阅官方发布页';
   } else if (eolSource === 'internal') { eolStatus = '维护中'; eolBasis = '内部自研组件'; suggestVersion = d.version; eolAction = '内部维护'; }
@@ -635,7 +649,7 @@ async function evalComponentBatch(name, version, vendor, rawName, groupId) {
 
     var rt2 = await batchEOLRuntimeCache[cacheKey];
     ctx.eolData = rt2.eolData; ctx.aiEol = rt2.aiEol;
-    ctx.eolSource = rt2.eolSource;
+    ctx.eolSource = rt2.eolSource; ctx.mavenInfo = rt2.mavenInfo; ctx.githubInfo = rt2.githubInfo;
   }
 
   await Promise.all([
@@ -645,6 +659,18 @@ async function evalComponentBatch(name, version, vendor, rawName, groupId) {
   ]);
 
   return ctx;
+}
+
+function matchEOLCycle(eolData, version) {
+  var userVer = String(version || '').trim();
+  var sorted = eolData.slice().sort(function(a, b) {
+    return String(b.cycle || '').length - String(a.cycle || '').length;
+  });
+  for (var i = 0; i < sorted.length; i++) {
+    var cyc = String(sorted[i].cycle || '');
+    if (cyc && (userVer === cyc || userVer.startsWith(cyc + '.'))) return sorted[i];
+  }
+  return eolData[0];
 }
 
 function generateEOLNameVariants(artifactId, groupId) {
@@ -713,7 +739,7 @@ function generateEOLNameVariants(artifactId, groupId) {
 async function checkMavenCentralLatest(groupId, artifactId) {
   if (!groupId || !artifactId) return null;
   try {
-    var url = 'https://search.maven.org/solrsearch/select?q=g:"' + encodeURIComponent(groupId) + '"+AND+a:"' + encodeURIComponent(artifactId) + '"&core=gav&rows=1&wt=json';
+    var url = 'https://search.maven.org/solrsearch/select?q=g:%22' + encodeURIComponent(groupId) + '%22+AND+a:%22' + encodeURIComponent(artifactId) + '%22&core=gav&rows=1&sort=timestamp+desc&wt=json';
     var r = await fetchWithTimeout(url, null, 10000);
     if (!r.ok) return null;
     var data = await r.json();
@@ -748,22 +774,59 @@ async function checkGithubLatestRelease(artifactId) {
     'commons-lang3': 'apache/commons-lang', 'commons-io': 'apache/commons-io',
     'commons-codec': 'apache/commons-codec', 'commons-compress': 'apache/commons-compress',
     'commons-collections4': 'apache/commons-collections',
+    'commons-collections': 'apache/commons-collections',
+    'commons-beanutils': 'apache/commons-beanutils',
+    'commons-net': 'apache/commons-net',
+    'commons-logging': 'apache/commons-logging',
+    'commons-cli': 'apache/commons-cli',
+    'commons-pool': 'apache/commons-pool',
+    'commons-pool2': 'apache/commons-pool',
+    'commons-dbcp': 'apache/commons-dbcp',
+    'commons-fileupload': 'apache/commons-fileupload',
+    'commons-math3': 'apache/commons-math',
     'jackson-databind': 'FasterXML/jackson-databind', 'jackson-core': 'FasterXML/jackson-core',
     'jackson-annotations': 'FasterXML/jackson-annotations',
     'mybatis': 'mybatis/mybatis-3', 'mybatis-spring': 'mybatis/spring',
     'netty-transport': 'netty/netty', 'netty-handler': 'netty/netty', 'netty-common': 'netty/netty', 'netty-all': 'netty/netty',
+    'netty-codec': 'netty/netty', 'netty-codec-http': 'netty/netty', 'netty-resolver': 'netty/netty',
+    'netty-buffer': 'netty/netty', 'netty-transport': 'netty/netty',
     'shiro-core': 'apache/shiro', 'shiro-web': 'apache/shiro',
     'dubbo': 'apache/dubbo', 'zookeeper': 'apache/zookeeper',
     'kafka-clients': 'apache/kafka',
     'tomcat-embed-core': 'apache/tomcat', 'tomcat-coyote': 'apache/tomcat',
     'guava': 'google/guava', 'gson': 'google/gson',
     'fastjson': 'alibaba/fastjson', 'fastjson2': 'alibaba/fastjson2',
+    'easyexcel': 'alibaba/easyexcel',
     'druid': 'alibaba/druid', 'canal-client': 'alibaba/canal',
     'nacos-client': 'alibaba/nacos',
     'poi': 'apache/poi', 'poi-ooxml': 'apache/poi',
     'velocity': 'apache/velocity-engine',
     'jwt': 'auth0/java-jwt', 'jjwt-api': 'jwtk/jjwt',
     'bouncycastle': 'bcgit/bc-java',
+    'bcel': 'apache/commons-bcel',
+    'jedis': 'redis/jedis',
+    'lettuce-core': 'lettuce-io/lettuce-core',
+    'jsoup': 'jhy/jsoup',
+    'slf4j-api': 'qos-ch/slf4j',
+    'quartz': 'quartz-scheduler/quartz',
+    'javassist': 'jboss-javassist/javassist',
+    'jaxb-api': 'javaee/jaxb-spec',
+    'jettison': 'codehaus/jettison',
+    'jaxen': 'jaxen/jaxen',
+    'ezmorph': 'ezmorph/ezmorph',
+    'httpclient': 'apache/httpcomponents-client',
+    'httpcore': 'apache/httpcomponents-core',
+    'httpclient5': 'apache/httpcomponents-client',
+    'httpcore5': 'apache/httpcomponents-core',
+    'mariadb-java-client': 'mariadb-corporation/mariadb-connector-j',
+    'stax2-api': 'codehaus-plexus/stax2-api',
+    'commons-jexl3': 'apache/commons-jexl',
+    'jctools-core': 'JCTools/JCTools',
+    'woden-core': 'apache/woden',
+    'axis2-kernel': 'apache/axis2-java',
+    'axiom-api': 'apache/axis2-java',
+    'xmlschema-core': 'apache/xmlschema',
+    'neethi': 'apache/neethi',
   };
   if (commonRepos[name]) repoCandidates.push(commonRepos[name]);
   repoCandidates.push(name + '/' + name);
@@ -808,12 +871,11 @@ async function aiEolBatch(name, version, groupId, sources, mavenInfo, githubInfo
   prompt += '- 如果该组件仍有新版本发布、官方仍在维护 → "维护中"\n';
   prompt += '- 如果该组件已停止维护、官方不再发布更新 → "已EOL"\n';
   prompt += '- 如果该组件即将停止维护（已公布 EOL 日期且在 6 个月内）→ "即将EOL"\n';
-  prompt += '\n参考依据（按优先级）：\n';
-  prompt += '1. 如果 Maven Central 最后发布时间 < 1 年 → 倾向 "维护中"\n';
-  prompt += '2. 如果 Maven Central 最后发布时间 > 2 年 → 倾向 "已EOL"\n';
-  prompt += '3. 如果 GitHub 最近 Release < 1 年 → 倾向 "维护中"\n';
-  prompt += '4. 如果 GitHub 最近 Release > 2 年 → 倾向 "已EOL"\n';
-  prompt += '5. 如果介于 1-2 年之间，用你的知识判断该组件是否仍在维护\n';
+  prompt += '\n重要提示：\n';
+  prompt += '- Maven Central 或 GitHub 的最后发布时间仅作为参考，不能仅凭时间判断是否在维护\n';
+  prompt += '- 很多项目虽然近期有发布，但实际上已停止活跃维护，只是偶尔打安全补丁\n';
+  prompt += '- 请结合你对这个组件的了解：官方是否活跃？社区是否活跃？是否有维护计划？\n';
+  prompt += '- 对于 Apache Commons 等老项目，如果已进入维护模式（仅安全补丁、无新功能），可判定为"已EOL"\n';
   prompt += '\n如果不确定，默认判断为 "已EOL"。\n';
   prompt += '\n请以 JSON 格式返回：\n';
   prompt += '{\n  "eolStatus": "维护中" 或 "已EOL" 或 "即将EOL",\n';
@@ -879,25 +941,20 @@ async function startBatch() {
       var eolStatus = '已EOL';
       if (ctx.eolSource === 'internal') eolStatus = '维护中';
       else if (ctx.eolData && Array.isArray(ctx.eolData) && ctx.eolData.length > 0) {
-        var eolVal = ctx.eolData[0].eol;
+        var matchedCycle = matchEOLCycle(ctx.eolData, ctx.version || item.version);
+        var eolVal = matchedCycle.eol;
         if (eolVal === false) eolStatus = '维护中';
         else if (eolVal === true || eolVal === 'true') eolStatus = '已EOL';
         else if (typeof eolVal === 'string' && eolVal.trim() !== '') {
           var eolDate = new Date(eolVal);
           if (!isNaN(eolDate.getTime()) && eolDate < new Date()) eolStatus = '已EOL';
-          else eolStatus = '维护中';
+          else eolStatus = '即将EOL';
         }
-        else eolStatus = '维护中';
+        else eolStatus = '已EOL';
       }
       else if (ctx.aiEol) eolStatus = ctx.aiEol.eolStatus || '已EOL';
-      else if (ctx.eolSource === 'maven-stale') {
-        if (ctx.mavenInfo && ctx.mavenInfo.yearsSinceLast > 2) eolStatus = '已EOL';
-        else eolStatus = '维护中';
-      }
-      else if (ctx.eolSource === 'github-stale') {
-        if (ctx.githubInfo && ctx.githubInfo.yearsSinceLast > 2) eolStatus = '已EOL';
-        else eolStatus = '维护中';
-      }
+      else if (ctx.eolSource === 'maven-stale') eolStatus = '已EOL';
+      else if (ctx.eolSource === 'github-stale') eolStatus = '已EOL';
       else eolStatus = '已EOL';
       batchResults[idx] = { name: item.artifactId, version: item.version, vendor: item.vendor, fullName: item.fullName, vulnCount: vulns.length, crit: crit, high: high, eolStatus: eolStatus, reportData: ctx };
       completed++;
